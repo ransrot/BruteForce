@@ -145,8 +145,13 @@ class BruteForce(Parser):
 if __name__ == '__main__':
 	try:
 		check_tor_running()
-		Proxy().change_ip()
-		BruteForce().email_login()
+		arguments = sys.argv[1:]
+
+		if "--proxy" in arguments:
+			Proxy().change_ip()
+			BruteForce().email_login()
+		else:
+			BruteForce().email_login()
 	except KeyboardInterrupt:
 		print("[-] Exiting.")
 		exit()
