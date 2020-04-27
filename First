@@ -9,50 +9,6 @@ import time
 import sys
 from functools import wraps
 
-def check_tor_running():
-	try:
-		subprocess.check_output(["pidof", "tor"])
-	except subprocess.CalledProcessError:
-		print("[-] Tor not running exiting.")
-		exit()
-
-
-def get_arguments():
-	try:
-		arguments = sys.argv[1:]
-	except IndexError:
-		pass
-	return arguments
-
-
-def sleep_timer(function):
-	@wraps(function)
-	def check_for_proxy(*args):
-		arguments = get_arguments()
-		if "--proxy" not in arguments:
-			time.sleep(1.5)  # sleep only if proxy not in argument
-			return function(*args)
-		return function(*args)
-	return check_for_proxy
-
-def make_file(function):
-	@wraps(function)
-	def check_for_save(*args):
-		arguments = get_arguments()
-		if "--save" in arguments:
-			try:
-				with open("incorrect_passwords.txt", "a") as f:
-					f.write(args[2])
-					f.write("\n")
-					f.close()
-			except PermissionError:
-				print("[-] Invalid permissions. Please try with sudo")
-				exit()
-			return function(*args)
-		return function(*args)
-	return check_for_save
-
-
 class Colors:
 
 	@staticmethod
@@ -82,6 +38,7 @@ class Parser:
 		self.args.add_argument("--file", help="Wordlist to pick and try to use to bruteforce", type=self.validate_file, required=True)
 		self.args.add_argument("--proxy", help="Set a proxy if you need it. Slower login attempts if set proxy", action='store_true')
 		self.args.add_argument("--save", help="If you want to save the passwords that were incorrect to a file.", action='store_true')
+		self.args.add_argument("--time", help="Specify a time to sleep in seconds. Defaults to 0.5 seconds. Not recommended to set a time if you are using a proxy.", type=self.validate_time)
 
 		self.args_parsed = self.args.parse_args()
 
@@ -91,12 +48,67 @@ class Parser:
 	def get_file(self):
 		return self.args_parsed.file
 
+	def get_time(self):
+		return self.args_parsed.time
+
 	def validate_file(self, file):
 		if not os.path.exists(file) or not file.lower().endswith(".txt"):
 			print(Colors.red_color(f"[-] Invalid file: {file}"))
 			exit()
 		return file
 
+	def validate_time(self, time):
+		time = float(time)
+		if not isinstance(time, float):
+			print(Colors.red_color(f"[-] Invalid time: {str(time)}"))
+			exit()
+		return time
+
+def check_tor_running():
+	try:
+		subprocess.check_output(["pidof", "tor"])
+	except subprocess.CalledProcessError:
+		print("[-] Tor not running exiting.")
+		exit()
+
+
+def get_arguments():
+	try:
+		arguments = sys.argv[1:]
+	except IndexError:
+		pass
+	return arguments
+
+def make_file(function):
+	@wraps(function)
+	def check_for_save(*args):
+		arguments = get_arguments()
+		if "--save" in arguments:
+			try:
+				with open("incorrect_passwords.txt", "a") as f:
+					f.write(args[2])
+					f.write("\n")
+					f.close()
+			except PermissionError:
+				print("[-] Invalid permissions. Please try with sudo")
+				exit()
+			return function(*args)
+		return function(*args)
+	return check_for_save
+
+
+def sleep_timer(function):
+	@wraps(function)
+	def grab_user_time(*args):
+		user_time = Parser().get_time()
+		arguments = get_arguments()
+
+		if "--time" in arguments:
+			time.sleep(user_time)
+			return function(*args)
+		time.sleep(0.5)
+		return function(*args)
+	return grab_user_time
 
 class Email:
 	def __init__(self, email, password):
