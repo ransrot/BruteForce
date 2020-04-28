@@ -9,6 +9,7 @@ import time
 import sys
 from functools import wraps
 import ipaddress
+import threading
 
 class Colors:
 
@@ -170,18 +171,21 @@ class Email:
 			print(Colors.purple_color(incorrect_password))
 
 	def remove_correct_password(self):
-		with open("incorrect_passwords.txt", "r") as f:
-			data = f.readlines()
-			f.close()
-			os.remove("incorrect_passwords.txt")
-			new_data = data[:-1]
+		arguments = get_arguments()
 
-			for letters in new_data:
-				letters = letters.strip()
-				with open("incorrect_passwords.txt", "a") as f:
-					f.write(letters)
-					f.write("\n")
-					f.close()
+		if "--save" in arguments:
+			with open("incorrect_passwords.txt", "r") as f:
+				data = f.readlines()
+				f.close()
+				os.remove("incorrect_passwords.txt")
+				new_data = data[:-1]
+
+				for letters in new_data:
+					letters = letters.strip()
+					with open("incorrect_passwords.txt", "a") as f:
+						f.write(letters)
+						f.write("\n")
+						f.close()
 
 class Proxy(Parser):
 	def __init__(self):
@@ -202,7 +206,8 @@ class Proxy(Parser):
 		get_ip = f"[-] Your current IP is {current_ip.content.decode()}"
 		print(Colors.red_color(get_ip))
 		print("\n")
-
+		print("\n[+] Waiting for a connection")
+		
 		if self.proxy_ip and self.port:
 			self.socket_connection(self.socket_type, self.proxy_ip, self.port)
 		else:
@@ -260,8 +265,11 @@ if __name__ == '__main__':
 	try:
 		arguments = sys.argv[1:]
 
-		if "--proxy" in arguments and "--port" in arguments and "--socks" in arguments:
+		if "--proxy" in arguments and "--port" in arguments and "--socks" in arguments and "--email" in arguments and "--file" in arguments:
 			Proxy().change_ip()
+			BruteForce().email_login()
+		elif "--default-proxy" in arguments and "--email" in arguments and "--file" in arguments:
+			check_tor_running()
 			BruteForce().email_login()
 		else:
 			BruteForce().email_login()
